@@ -1,0 +1,26 @@
+version: "3.9"
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: notify-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+  notify:
+    build: .
+    container_name: notify-service
+    ports:
+      - "8080:8080"
+    environment:
+      - APP_ENV=local
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB=0
+    depends_on:
+      - redis
+
+volumes:
+  redis_data:

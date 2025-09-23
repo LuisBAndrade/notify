@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+    <body>
+        <h1>Websocket Tester</h1>
+        <div id="messages"></div>
+        <script>
+            const ws = new WebSocket("ws://localhost:8080/api/ws?user_id=123&client_name=test");
+
+            ws.onopen = () => {
+                console.log("Connected");
+                ws.send("Hello from browser");
+            };
+
+            ws.onmessage = (event) => {
+                const msg = JSON.parse(event.data);
+                const div = document.createElement("div");
+                div.innerText = `[${msg.message_id}] ${msg.message}`;
+                document.getElementById("messages").appendChild(div);
+            }
+
+            ws.onclose = () => console.log("Disconnected");
+        </script>
+    </body>
+</html>
