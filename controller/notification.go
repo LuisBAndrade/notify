@@ -2,7 +2,6 @@ package controller
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 
 	"github.com/LuisBAndrade/notify/models"
@@ -17,18 +16,15 @@ func SendNotification(c *gin.Context) {
 		return 
 	}
 
-	bytes, _ := json.Marshal(req.Payload)
-	message := string(bytes)
-
 	ctx := context.Background()
-	msgID, err := redisstream.PublishMessage(ctx, req.UserID, message)
+	msgID, err := redisstream.PublishEvent(ctx, req.UserID, "NOTIFICATION", req.Payload)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to publish"})
 		return 
 	}
 
 	c.JSON(http.StatusOK, models.NotificationResponse{
-		Success: true,
+		Success:  true,
 		MessageID: msgID,
 	})
 }
@@ -37,14 +33,18 @@ func AcknowledgeNotification(c *gin.Context) {
 	var req models.AcknowledgeRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return 
+		return
 	}
 
 	ctx := context.Background()
 	if err := redisstream.AcknowledgeNotifications(ctx, req.UserID, req.MessageIDs); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to acknowledge"})
-		return 
+		return
 	}
+
+	_, _ = redisstream.PublishEvent(ctx, req.UserID, "ACK", map[string]interface{}{
+		"acknowledged_ids": req.MessageIDs,
+	})
 
 	c.JSON(http.StatusOK, models.AcknowledgeResponse{Success: true})
 }

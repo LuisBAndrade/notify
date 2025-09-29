@@ -1,0 +1,19 @@
+# Ignore Git and VCS
+.git
+.gitignore
+README.md
+
+# Ignore configs not needed for build
+docker-compose.yml
+
+# Ignore development artifacts
+*.log
+*.env
+*.DS_Store
+
+# Ignore dependencies/build caches
+node_modules/
+vendor/
+.tmp/
+.idea/
+.vscode/

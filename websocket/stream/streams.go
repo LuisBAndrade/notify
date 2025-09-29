@@ -1,7 +1,8 @@
-package redisstream 
+package redisstream
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"strconv"
@@ -22,28 +23,7 @@ var (
 )
 
 func PublishMessage(ctx context.Context, userID, message string) (string, error) {
-	streamKey := utils.GetStreamKey(userID)
-	payload := map[string]interface{}{
-		"message": message,
-		"timestamp": strconv.FormatInt(time.Now().Unix(), 10),
-	}
-	client := redisclient.GetRedisClient()
-
-	args := &redis.XAddArgs{
-		Stream: streamKey,
-		Values: payload,
-		MaxLen: MAX_STREAM_LENGTH,
-		Approx: true,
-	}
-
-	msgID, err := client.XAdd(ctx, args).Result()
-	if err != nil {
-		log.Printf("[Redis Publisher] Error adding message to %s: %v", streamKey, err)
-		return "", err
-	}
-
-	log.Printf("[Redis Publisher] Added message to %s: %v (id: %s)", streamKey, payload, msgID)
-	return msgID, nil  
+    return PublishEvent(ctx, userID, "NOTIFICATION", map[string]string{"text": message})
 }
 
 func CreateConsumerGroup(ctx context.Context, userID string) error {
@@ -90,17 +70,21 @@ func GetPendingNotifications(ctx context.Context, userID string) ([]redis.XMessa
 	return notifications, nil 
 }
 
-func ListenForNotifications(ctx context.Context, userID string, sendFn func(msgID string, message string) error) {
+func ListenForNotifications(
+	ctx context.Context, 
+	userID string, 
+	sendFn func(msg redis.XMessage) error,
+) {
 	streamKey := utils.GetStreamKey(userID)
 	client := redisclient.GetRedisClient()
 
 	for {
 		res, err := client.XReadGroup(ctx, &redis.XReadGroupArgs{
-			Group: GROUP_NAME(),
+			Group:    GROUP_NAME(),
 			Consumer: userID,
-			Streams: []string{streamKey, ">"},
-			Count: XREAD_COUNT,
-			Block: XREAD_TIMEOUT,
+			Streams:  []string{streamKey, ">"},
+			Count:    XREAD_COUNT,
+			Block:    XREAD_TIMEOUT,
 		}).Result()
 
 		if err != nil && err != redis.Nil {
@@ -116,10 +100,8 @@ func ListenForNotifications(ctx context.Context, userID string, sendFn func(msgI
 
 		for _, strm := range res {
 			for _, msg := range strm.Messages {
-				if val, ok := msg.Values["message"].(string); ok {
-					if sendErr := sendFn(msg.ID, val); sendErr != nil {
-						log.Printf("Error sending message to websocket: %v", sendErr)
-					}
+				if sendErr := sendFn(msg); sendErr != nil {
+					log.Printf("Error sending message to websocket: %v", sendErr)
 				}
 			}
 		}
@@ -139,6 +121,38 @@ func AcknowledgeNotifications(ctx context.Context, userID string, messageIDs []s
 		log.Printf("Error acknowledging messages on %s: %v", streamKey, err)
 		return fmt.Errorf("failed to ack messages: %w", err)
 	}
-	return nil 
 
+	return nil
+}
+
+
+func PublishEvent(ctx context.Context, userID, eventType string, payload interface{}) (string, error) {
+    streamKey := utils.GetStreamKey(userID)
+    client := redisclient.GetRedisClient()
+
+    // Serialize payload to JSON
+    jsonPayload, err := json.Marshal(payload)
+    if err != nil {
+        return "", fmt.Errorf("failed to serialize payload: %w", err)
+    }
+
+    args := &redis.XAddArgs{
+        Stream: streamKey,
+        Values: map[string]interface{}{
+            "event":   eventType,
+            "payload": string(jsonPayload),
+            "ts":      strconv.FormatInt(time.Now().Unix(), 10),
+        },
+        MaxLen: MAX_STREAM_LENGTH,
+        Approx: true,
+    }
+
+    msgID, err := client.XAdd(ctx, args).Result()
+    if err != nil {
+        log.Printf("[Redis Publisher] Error adding event to %s: %v", streamKey, err)
+        return "", err
+    }
+
+    log.Printf("[Redis Publisher] Added %s event to %s (id: %s)", eventType, streamKey, msgID)
+    return msgID, nil
 }

@@ -2,12 +2,15 @@ package controller
 
 import (
 	"context"
+	"encoding/json"
 	"log"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
+	"github.com/redis/go-redis/v9"
 
+	"github.com/LuisBAndrade/notify/models"
 	"github.com/LuisBAndrade/notify/websocket/manager"
 	"github.com/LuisBAndrade/notify/websocket/stream"
 )
@@ -44,24 +47,14 @@ func HandleWebsocket(c *gin.Context) {
 
 	if pending, err := redisstream.GetPendingNotifications(ctx, userID); err == nil {
 		for _, msg := range pending {
-			if val, ok := msg.Values["message"].(string); ok {
-				payload := map[string]string{
-					"message_id": msg.ID,
-					"message": val,
-				}
-				_ = conn.WriteJSON(payload)
-			}
+			_ = emitToSocket(conn, msg)
 		}
 	} else {
-		log.Printf("Error fetching pending notifications for user %s: %v", userID, err)
+		log.Printf("Error fetching pending: %v", err)
 	}
 
-	go redisstream.ListenForNotifications(ctx, userID, func(msgID string, message string) error {
-		payload := map[string]string{
-			"message_id": msgID,
-			"message": message,
-		}
-		return conn.WriteJSON(payload)
+	go redisstream.ListenForNotifications(ctx, userID, func(msg redis.XMessage) error {
+		return emitToSocket(conn, msg)
 	})
 
 	for {
@@ -74,11 +67,29 @@ func HandleWebsocket(c *gin.Context) {
 		text := string(data)
 		log.Printf("Received message from %s: %s", userID, text)
 
-		if _, err := redisstream.PublishMessage(ctx, userID, "[Echo] " + text); err != nil {
+		if _, err := redisstream.PublishEvent(ctx, userID, "[USER_MESSAGE] ", map[string]string{
+			"text": text,
+		}); err != nil {
 			log.Printf("Error publishing user message: %v", err)
 		}
 	}
 
 	manager.Disconnect(conn, userID)
 	log.Printf("Connection cleanup done for user %s", userID)
+}
+
+func emitToSocket(conn *websocket.Conn, msg redis.XMessage) error {
+    eventType, _ := msg.Values["event"].(string)
+    rawPayload, _ := msg.Values["payload"].(string)
+
+    var payload interface{}
+    _ = json.Unmarshal([]byte(rawPayload), &payload)
+
+    evt := models.EventMessage{
+        Event:     eventType,
+        MessageID: msg.ID,
+        Payload:   payload,
+    }
+
+    return conn.WriteJSON(evt)
 }
