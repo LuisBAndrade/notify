@@ -10,6 +10,9 @@ func main() {
 	router := gin.Default()
 
 	router.GET("/api/ws", controller.HandleWebsocket)
+	router.GET("/healthz", func(c *gin.Context) {
+		c.JSON(200, gin.H{"status": "ok"})
+	})
 
 	router.POST("/api/notification/send", controller.SendNotification)
 	router.POST("/api/notification/acknowledge", controller.AcknowledgeNotification)
