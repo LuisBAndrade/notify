@@ -10,7 +10,7 @@ services:
       - redis_data:/data
 
   notify:
-    build: .
+    image: registry.gitlab.com/benjaminandrade/notification-hub:latest
     container_name: notify-service
     ports:
       - "8080:8080"
