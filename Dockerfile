@@ -9,7 +9,7 @@ RUN go mod download
 
 COPY . .
 
-RUN go build -o notify ./main.go
+RUN go build -trimpath -ldflags="-s -w" -o notify ./main.go
 
 FROM alpine:3.18
 WORKDIR /app
