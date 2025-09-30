@@ -1,0 +1,6 @@
+notification.benexpense.lat {
+    encode gzip
+
+    # Reverse-proxy all routes (/, /api, /api/aws) to your notify service
+    reverse_proxy notify:8080
+}

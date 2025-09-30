@@ -22,5 +22,22 @@ services:
     depends_on:
       - redis
 
+
+caddy:
+  image: caddy:2
+  container_name: caddy-gateway
+  restart: unless-stopped
+  ports:
+    - "80:80"
+    - "443:443"
+  volumes:
+    - ./Caddyfile:/etc/caddy/Caddyfile
+    - caddy_data:/data
+    - caddy_config:/config
+  depends_on:
+    -notify
+
 volumes:
   redis_data:
+  caddy_data:
+  caddy_config:
