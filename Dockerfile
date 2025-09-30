@@ -16,7 +16,7 @@ WORKDIR /app
 
 COPY --from=builder /app/notify .
 
-COPY client.html
+COPY client.html .
 
 EXPOSE 8080
 
