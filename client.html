@@ -46,101 +46,52 @@
 
     <div id="messages"></div>
 
-<script>
-  const userId = "123";
+  <script>
+    const userId = "123";
 
-  // Build WebSocket URL dynamically: wss:// for https, ws:// for http
-  const wsProtocol = window.location.protocol === "https:" ? "wss" : "ws";
-  const ws = new WebSocket(
-    `${wsProtocol}://${window.location.host}/api/ws?user_id=${userId}&client_name=test`
-  );
+    // Determine ws:// or wss:// automatically
+    const wsProtocol = window.location.protocol === "https:" ? "wss" : "ws";
+    const ws = new WebSocket(
+      `${wsProtocol}://${window.location.host}/api/ws?user_id=${userId}&client_name=test`
+    );
 
-  ws.onopen = () => {
-    console.log("Connected to WebSocket");
-    ws.send("Hello from browser"); // gets published as USER_MESSAGE
-  };
+    ws.onopen = () => {
+      console.log("Connected");
+      ws.send("Hello from browser");
+    };
 
-  ws.onmessage = (event) => {
-    const msg = JSON.parse(event.data);
-    console.log("Event Received:", msg);
+    ws.onmessage = (event) => {
+      const msg = JSON.parse(event.data);
+      console.log("Event Received:", msg);
+    };
 
-    switch (msg.event) {
-      case "NOTIFICATION":
-        renderNotification(msg);
-        break;
-      case "USER_MESSAGE":
-        renderGeneric(
-          `[${msg.event}] ${msg.message_id}: ${msg.payload.text}`,
-          "user-message"
-        );
-        break;
-      case "ACK":
-        renderGeneric(
-          `[${msg.event}] Acknowledged IDs: ${msg.payload.acknowledged_ids.join(
-            ", "
-          )}`,
-          "ack"
-        );
-        break;
-      default:
-        renderGeneric("[UNKNOWN EVENT] " + JSON.stringify(msg), "");
+    ws.onclose = () => console.log("Disconnected");
+
+    // ---- Button Actions ----
+    document.getElementById("notifyBtn").onclick = () => {
+      fetch("/api/notification/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          user_id: userId,
+          payload: { text: "Hello from API button!" },
+        }),
+      })
+        .then(r => r.json())
+        .then(console.log)
+        .catch(console.error);
+    };
+
+    function acknowledgeMessage(messageId) {
+      fetch("/api/notification/acknowledge", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          user_id: userId,
+          message_ids: [messageId],
+        }),
+      }).then(() => console.log("Acknowledged:", messageId));
     }
-  };
-
-  ws.onclose = () => console.log("Disconnected from WebSocket");
-
-  // ✅ Render a notification with "Mark as Read" button
-  function renderNotification(msg) {
-    const div = document.createElement("div");
-    div.className = "message notification";
-
-    const textSpan = document.createElement("span");
-    textSpan.textContent = `[${msg.event}] ${msg.message_id}: ${msg.payload.text}`;
-
-    const btn = document.createElement("button");
-    btn.textContent = "Mark as Read";
-    btn.className = "small";
-    btn.onclick = () => acknowledgeMessage(msg.message_id);
-
-    div.appendChild(textSpan);
-    div.appendChild(btn);
-
-    document.getElementById("messages").appendChild(div);
-  }
-
-  // ✅ Generic renderer for user/ack logs
-  function renderGeneric(text, cssClass) {
-    const div = document.createElement("div");
-    div.className = "message " + cssClass;
-    div.textContent = text;
-    document.getElementById("messages").appendChild(div);
-  }
-
-  // ---- Button Actions ----
-  document.getElementById("notifyBtn").onclick = () => {
-    fetch("/api/notification/send", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        user_id: userId,
-        payload: { text: "Hello from API button!" },
-      }),
-    });
-  };
-
-  // ✅ Call /acknowledge endpoint
-  function acknowledgeMessage(messageId) {
-    fetch("/api/notification/acknowledge", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        user_id: userId,
-        message_ids: [messageId],
-      }),
-    }).then(() => {
-      console.log("Acknowledged message:", messageId);
-    });
-  }
-</script>
+  </script>
   </body>
 </html>
