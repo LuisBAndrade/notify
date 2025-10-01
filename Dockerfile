@@ -19,5 +19,4 @@ COPY --from=builder /app/notify .
 COPY client.html .
 
 EXPOSE 8080
-
 CMD ["./notify"]
